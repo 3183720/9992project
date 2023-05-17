@@ -5,9 +5,11 @@ import os
 import sys
 import pprint
 import json
+import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 matplotlib.use('Agg')
+from torchvision.transforms.autoaugment import AutoAugmentPolicy
 
 import torch
 import torch.nn as nn
@@ -28,7 +30,7 @@ from configs import data_configs
 from datasets.images_dataset import ImagesDataset
 from models.age import AGE
 from options.train_options import TrainOptions
-from criteria import orthogonal_loss, sparse_loss
+from criteria import orthogonal_loss, sparse_loss,orthogonal_loss1
 from criteria.lpips.lpips import LPIPS
 from optimizer.ranger import Ranger
 from utils import common, train_utils
@@ -76,15 +78,30 @@ def train():
 		net.latent_avg = net.decoder.mean_latent(int(1e5))[0].detach()
 					
 	net = nn.parallel.DistributedDataParallel(net, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
-	
+	class AddGaussianNoise(object):
+		def __init__(self, mean=0., std=1.):
+			self.std = std
+			self.mean = mean
+
+		def __call__(self, tensor):
+			if np.random.random(1) > 0.05: 
+				return tensor + torch.randn(tensor.size()) * self.std + self.mean
+			else:
+				return tensor                 
+
+		def __repr__(self):
+			return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
 	# Initialize dataset
 	dataset_args = data_configs.DATASETS[opts.dataset_type]
 	transforms_dict = {
 			'transform_gt_train': transforms.Compose([
+#				transforms.AutoAugment(AutoAugmentPolicy.CIFAR10),
 				transforms.Resize((256, 256)),
 				transforms.RandomHorizontalFlip(0.5),
 				transforms.ToTensor(),
-				transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])]),
+				transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+				#AddGaussianNoise(0,0.05)
+				]),
 			'transform_source': None,
 			'transform_valid': transforms.Compose([
 				transforms.Resize((256, 256)),
@@ -95,8 +112,6 @@ def train():
 				transforms.ToTensor(),
 				transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])
 		}
-
-
 	
 	train_dataset = ImagesDataset(source_root=dataset_args['train_source_root'],
 									target_root=dataset_args['train_target_root'],
@@ -135,6 +150,7 @@ def train():
 		sparse=None
 	if opts.orthogonal_lambda > 0:
 		orthogonal = orthogonal_loss.OrthogonalLoss(opts).to(device).eval()
+		orthogonal1 = orthogonal_loss1.OrthogonalLoss(opts).to(device).eval()
 	else:
 		orthogonal=None
 
@@ -146,7 +162,7 @@ def train():
 			x, y, av_codes = batch
 			x, y, av_codes = x.to(device).float(), y.to(device).float(), av_codes.to(device).float()
 			outputs = net.forward(x, av_codes, return_latents=True)
-			loss, loss_dict, id_logs = calc_loss(opts, outputs, y, orthogonal, sparse, lpips)
+			loss, loss_dict, id_logs = calc_loss(opts, outputs, y, orthogonal,orthogonal1, sparse, lpips)
 			loss.backward()
 			optimizer.step()
 			loss_dict = reduce_loss_dict(loss_dict)
@@ -163,12 +179,12 @@ def train():
 			val_loss_dict = None
 			if global_step % opts.val_interval == 0 or global_step == opts.max_steps:
 				if dist.get_rank()==0:
-					val_loss_dict = validate(opts, net, orthogonal, sparse, lpips, valid_dataloader, device, global_step, logger)
+					val_loss_dict = validate(opts, net, orthogonal, orthogonal1,sparse, lpips, valid_dataloader, device, global_step, logger)
 					if val_loss_dict and (best_val_loss is None or val_loss_dict['loss'] < best_val_loss):
 						best_val_loss = val_loss_dict['loss']
 						checkpoint_me(net, opts, checkpoint_dir, best_val_loss, global_step, loss_dict, is_best=True)
 				else:
-					val_loss_dict = validate(opts, net, orthogonal, sparse, lpips, valid_dataloader, device, global_step)
+					val_loss_dict = validate(opts, net, orthogonal, orthogonal1,sparse, lpips, valid_dataloader, device, global_step)
 
 			if dist.get_rank()==0:
 				if global_step % opts.save_interval == 0 or global_step == opts.max_steps:
@@ -184,7 +200,7 @@ def train():
 
 			global_step += 1
 
-def validate(opts, net, orthogonal, sparse, lpips, valid_dataloader, device, global_step, logger=None):
+def validate(opts, net, orthogonal, orthogonal1, sparse, lpips, valid_dataloader, device, global_step, logger=None):
 	net.eval()
 	agg_loss_dict = []
 	for batch_idx, batch in enumerate(valid_dataloader):
@@ -192,7 +208,7 @@ def validate(opts, net, orthogonal, sparse, lpips, valid_dataloader, device, glo
 		with torch.no_grad():
 			x, y, av_codes = x.to(device).float(), y.to(device).float(), av_codes.to(device).float()
 			outputs = net.forward(x, av_codes, return_latents=True)
-			loss, cur_loss_dict, id_logs = calc_loss(opts, outputs, y, orthogonal, sparse, lpips)
+			loss, cur_loss_dict, id_logs = calc_loss(opts, outputs, y, orthogonal,orthogonal1, sparse, lpips)
 		agg_loss_dict.append(cur_loss_dict)
 
 		# Logging related
@@ -224,7 +240,7 @@ def checkpoint_me(net, opts, checkpoint_dir, best_val_loss, global_step, loss_di
 		else:
 			f.write(f'Step - {global_step}, \n{loss_dict}\n')
 
-def calc_loss(opts, outputs, y, orthogonal, sparse, lpips):
+def calc_loss(opts, outputs, y, orthogonal, orthogonal1,sparse, lpips):
 	loss_dict = {}
 	loss = 0.0
 	id_logs = None
@@ -232,6 +248,12 @@ def calc_loss(opts, outputs, y, orthogonal, sparse, lpips):
 		loss_l2 = F.mse_loss(outputs['y_hat'], y)
 		loss_dict['loss_l2'] = loss_l2
 		loss += loss_l2 * opts.l2_lambda
+	# if opts.l2_lambda > 0:
+		#print(outputs['dw'][0].shape, outputs['dw'][1].shape)
+		#print(outputs['dw'][0].shape, outputs['dw'][1].shape)
+		# loss_l21 = F.mse_loss(outputs['dw'][0][0], outputs['dw'][1][0])
+		# loss_dict['loss_l2_ir'] = loss_l21
+		# loss += loss_l21.sum() * 0.00005
 	if opts.lpips_lambda > 0:
 		loss_lpips = lpips(outputs['y_hat'], y)
 		loss_dict['loss_lpips'] = loss_lpips
@@ -240,6 +262,10 @@ def calc_loss(opts, outputs, y, orthogonal, sparse, lpips):
 		loss_orthogonal_AB = orthogonal(outputs['A'])
 		loss_dict['loss_orthogona'] = loss_orthogonal_AB
 		loss += (loss_orthogonal_AB) * opts.orthogonal_lambda
+	# if opts.orthogonal_lambda > 0:
+	# 	loss_orthogonal_AB1 = orthogonal1(outputs['A'])
+	# 	loss_dict['loss_orthogona1'] = loss_orthogonal_AB1
+	# 	loss += (loss_orthogonal_AB1) * opts.orthogonal_lambda
 	if opts.sparse_lambda > 0:
 		loss_l1 = sparse(outputs['x'])
 		loss_dict['loss_sparse'] = loss_l1
@@ -318,32 +344,30 @@ def reduce_loss_dict(loss_dict):
 	return reduced_losses
 
 def configure_datasets(opts, local_rank):
-		if opts.dataset_type not in data_configs.DATASETS.keys():
-			Exception(f'{opts.dataset_type} is not a valid dataset_type')
-		if local_rank==0:
-			print(f'Loading dataset for {opts.dataset_type}')
-		dataset_args = data_configs.DATASETS[opts.dataset_type]
-		transforms_dict = dataset_args['transforms'](opts).get_transforms()
-		train_dataset = ImagesDataset(source_root=dataset_args['train_source_root'],
-									  target_root=dataset_args['train_target_root'],
-									  average_code_root=opts.class_embedding_path,
-									  source_transform=transforms_dict['transform_source'],
-									  target_transform=transforms_dict['transform_gt_train'],
-									  opts=opts)
-		valid_dataset = ImagesDataset(source_root=dataset_args['valid_source_root'],
-									 target_root=dataset_args['valid_target_root'],
-									 average_code_root=opts.class_embedding_path,
-									 source_transform=transforms_dict['transform_source'],
-									 target_transform=transforms_dict['transform_valid'],
-									 opts=opts)
-		if local_rank==0:
-			print(f"Number of training samples: {len(train_dataset)}")
-			print(f"Number of valid samples: {len(valid_dataset)}")
-		return train_dataset, valid_dataset
-
+	if opts.dataset_type not in data_configs.DATASETS.keys():
+		Exception(f'{opts.dataset_type} is not a valid dataset_type')
+	if local_rank==0:
+		print(f'Loading dataset for {opts.dataset_type}')
+	dataset_args = data_configs.DATASETS[opts.dataset_type]
+	transforms_dict = dataset_args['transforms'](opts).get_transforms()
+	train_dataset = ImagesDataset(source_root=dataset_args['train_source_root'],
+								  target_root=dataset_args['train_target_root'],
+								  average_code_root=opts.class_embedding_path,
+								  source_transform=transforms_dict['transform_source'],
+								  target_transform=transforms_dict['transform_gt_train'],
+								  opts=opts)
+	valid_dataset = ImagesDataset(source_root=dataset_args['valid_source_root'],
+								 target_root=dataset_args['valid_target_root'],
+								 average_code_root=opts.class_embedding_path,
+								 source_transform=transforms_dict['transform_source'],
+								 target_transform=transforms_dict['transform_valid'],
+								 opts=opts)
+	if local_rank==0:
+		print(f"Number of training samples: {len(train_dataset)}")
+		print(f"Number of valid samples: {len(valid_dataset)}")
+	return train_dataset, valid_dataset
 
 
 if __name__ == '__main__':
 	# torch.multiprocessing.set_start_method('spawn')
 	train()
-
