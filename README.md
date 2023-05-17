@@ -1,5 +1,5 @@
 # 9992project
-# Attribute Group Editing for Reliable Few-shot Image Generation applied in the domain of emotion generation
+## Attribute Group Editing for Reliable Few-shot Image Generation applied in the domain of emotion generation
 
 ## Description   
 Modified implementation of AGE for few-shot image generation. Code is modified from [AGE](https://github.com/UniBester/AGE.git).
@@ -13,11 +13,7 @@ Modified implementation of AGE for few-shot image generation. Code is modified f
 ### Prerequisites
 - Linux
 - NVIDIA GPU + CUDA CuDNN (CPU may be possible with some modifications, but is not inherently supported)
-- Python 3
-
-### Installation
-
-- Clone this repo  
+- Python 3 
 
 ### Pretrained pSp
 Follow the [instructions](https://github.com/eladrich/pixel2style2pixel.git) to train a pSp model firsly. Or you can also directly download the [pSp pre-trained models](https://drive.google.com/drive/folders/1gTSghHGuwoj9gKsLc2bcUNF6ioFBpRWB?usp=sharing).
@@ -109,7 +105,7 @@ tools/train.py \
 Having trained your model or using [pre-trained models](https://drive.google.com/drive/folders/17BZcbacTRSCPuapcLtVKQy9ZtTUzHfY_?usp=sharing) provided, you can use `tools/inference.py` to apply the model on a set of images.   
 For example, 
 ```
-python tools/inference.py \
+cd AGE;python tools/inference.py \
 --output_path=/path/to/output \
 --checkpoint_path=/path/to/checkpoint \
 --test_data_path=/path/to/test/input \
@@ -126,7 +122,7 @@ python tools/inference.py \
 ### For emotion generation
 specify different train_data_path and n_distribution_path for different emotion labels
 ```
-python tools/inference.py \
+cd AGE;python tools/inference.py \
 --output_path=/path/to/output \
 --checkpoint_path=/path/to/checkpoint \
 --test_data_path=/path/to/test/input \
