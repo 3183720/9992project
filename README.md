@@ -2,7 +2,7 @@
 # Attribute Group Editing for Reliable Few-shot Image Generation applied in the domain of emotion generation
 
 ## Description   
-Modified implementation of AGE for few-shot image generation. Code is modified from [AGE](https://github.com/UniBester/AGE.git(https://github.com/UniBester/AGE.git).
+Modified implementation of AGE for few-shot image generation. Code is modified from [AGE](https://github.com/UniBester/AGE.git).
 
 ### modification
 - removed the seed fixing during inference. Now one seed is used to generate one image. All seeds are preset.
@@ -47,7 +47,7 @@ The format of the file should be [label_id]_[any_name].jpg
 | &boxvr; models | Folder containting all the models and training objects
 | &boxv;&nbsp; &boxvr;&nbsp; encoders | Folder containing our pSp encoder architecture implementation and ArcFace encoder implementation from [TreB1eN](https://github.com/TreB1eN/InsightFace_Pytorch)
 | &boxv;&nbsp; &boxvr;&nbsp; stylegan2 | StyleGAN2 model from [rosinality](https://github.com/rosinality/stylegan2-pytorch)
-| &boxv;&nbsp; &boxur;&nbsp; age.py | Implementation of our AGE
+| &boxv;&nbsp; &boxur;&nbsp; age.py | Implementation of AGE
 | &boxvr;&nbsp; options | Folder with training and test command-line options
 | &boxvr;&nbsp; tools | Folder with running scripts for training and inference
 | &boxvr;&nbsp; optimizer | Folder with Ranger implementation from [lessw2020](https://github.com/lessw2020/Ranger-Deep-Learning-Optimizer)
