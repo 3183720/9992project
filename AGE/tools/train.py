@@ -344,30 +344,32 @@ def reduce_loss_dict(loss_dict):
 	return reduced_losses
 
 def configure_datasets(opts, local_rank):
-	if opts.dataset_type not in data_configs.DATASETS.keys():
-		Exception(f'{opts.dataset_type} is not a valid dataset_type')
-	if local_rank==0:
-		print(f'Loading dataset for {opts.dataset_type}')
-	dataset_args = data_configs.DATASETS[opts.dataset_type]
-	transforms_dict = dataset_args['transforms'](opts).get_transforms()
-	train_dataset = ImagesDataset(source_root=dataset_args['train_source_root'],
-								  target_root=dataset_args['train_target_root'],
-								  average_code_root=opts.class_embedding_path,
-								  source_transform=transforms_dict['transform_source'],
-								  target_transform=transforms_dict['transform_gt_train'],
-								  opts=opts)
-	valid_dataset = ImagesDataset(source_root=dataset_args['valid_source_root'],
-								 target_root=dataset_args['valid_target_root'],
-								 average_code_root=opts.class_embedding_path,
-								 source_transform=transforms_dict['transform_source'],
-								 target_transform=transforms_dict['transform_valid'],
-								 opts=opts)
-	if local_rank==0:
-		print(f"Number of training samples: {len(train_dataset)}")
-		print(f"Number of valid samples: {len(valid_dataset)}")
-	return train_dataset, valid_dataset
+		if opts.dataset_type not in data_configs.DATASETS.keys():
+			Exception(f'{opts.dataset_type} is not a valid dataset_type')
+		if local_rank==0:
+			print(f'Loading dataset for {opts.dataset_type}')
+		dataset_args = data_configs.DATASETS[opts.dataset_type]
+		transforms_dict = dataset_args['transforms'](opts).get_transforms()
+		train_dataset = ImagesDataset(source_root=dataset_args['train_source_root'],
+									  target_root=dataset_args['train_target_root'],
+									  average_code_root=opts.class_embedding_path,
+									  source_transform=transforms_dict['transform_source'],
+									  target_transform=transforms_dict['transform_gt_train'],
+									  opts=opts)
+		valid_dataset = ImagesDataset(source_root=dataset_args['valid_source_root'],
+									 target_root=dataset_args['valid_target_root'],
+									 average_code_root=opts.class_embedding_path,
+									 source_transform=transforms_dict['transform_source'],
+									 target_transform=transforms_dict['transform_valid'],
+									 opts=opts)
+		if local_rank==0:
+			print(f"Number of training samples: {len(train_dataset)}")
+			print(f"Number of valid samples: {len(valid_dataset)}")
+		return train_dataset, valid_dataset
+
 
 
 if __name__ == '__main__':
 	# torch.multiprocessing.set_start_method('spawn')
 	train()
+
