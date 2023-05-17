@@ -130,15 +130,15 @@ class AGE(nn.Module):
 			self.decoder.load_state_dict(get_keys(ckpt, 'decoder'), strict=True)
 			self.__load_latent_avg(ckpt)
 
-	def forward(self, x, av_codes, resize=True, latent_mask=None, input_code=False, randomize_noise=True,
+	def forward(self, x, av_codes, av_codes1, resize=True, latent_mask=None, input_code=False, randomize_noise=True,
 	            inject_latent=None, return_latents=False, alpha=None):
 		if input_code:
 			codes = x
 		else:
 			ocodes = self.encoder(x)
-			odw = ocodes[:, :6] - av_codes[:, :6]
+			odw = ocodes[:, :6] - av_codes[:, :6] 
 			dw, A, x = self.ax(odw)
-			codes = torch.cat((dw + av_codes[:, :6], ocodes[:, 6:]), dim=1)
+			codes = torch.cat((dw + av_codes1[:, :6], ocodes[:, 6:]), dim=1) 
 
 			# normalize with respect to the center of an average face
 			if self.opts.start_from_latent_avg:

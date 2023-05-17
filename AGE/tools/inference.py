@@ -41,7 +41,7 @@ def get_n_distribution(net, transform, class_embeddings, opts):
     np.save(os.path.join(opts.n_distribution_path, 'n_distribution.npy'),{'mean':mean, 'mean_abs':mean_abs, 'cov':cov})
 
 
-def sampler(outputs, dist, opts):
+def sampler(outputs, dist, opts, secondary_class_embeddings ):
     means=dist['mean']
     means_abs=dist['mean_abs']
     covs=dist['cov']
@@ -57,7 +57,8 @@ def sampler(outputs, dist, opts):
             dw=torch.matmul(outputs['A'][g], x.transpose(0,1)).squeeze(-1)
             dws.append(dw)
     dws=torch.stack(dws)
-    codes = torch.cat(((opts.alpha*dws.unsqueeze(0)+ outputs['ocodes'][:, :6]), outputs['ocodes'][:, 6:]), dim=1)
+    codes = torch.cat(((opts.alpha*dws.unsqueeze(0)+outputs['ocodes'][:, :6]*0.2+secondary_class_embeddings.unsqueeze(0)[:, :6]*0.8), outputs['ocodes'][:, 6:]), dim=1)
+    #outputs['ocodes'][:, :6]+
     return codes
 
 
@@ -67,7 +68,7 @@ if __name__=='__main__':
     SEED = 0
     random.seed(SEED)
     np.random.seed(SEED)
-
+    
     #load model
     test_opts = TestOptions().parse()
     ckpt = torch.load(test_opts.checkpoint_path, map_location='cpu')
@@ -90,8 +91,9 @@ if __name__=='__main__':
     # class_embeddings=torch.load(os.path.join(test_opts.class_embedding_path, 'class_embeddings.pt'))
     # get_n_distribution(net, transform, class_embeddings, test_opts)
 
-
-
+    secondary_class_embeddings=torch.load(os.path.join(test_opts.secondary_class_embedding_path, 'class_embeddings.pt'))
+    
+    emotion_average_code = secondary_class_embeddings[opts.emotion_label ]
     # generate data
     dist=np.load(os.path.join(opts.n_distribution_path, 'n_distribution.npy'), allow_pickle=True).item()
     test_data_path=test_opts.test_data_path
@@ -104,12 +106,9 @@ if __name__=='__main__':
             from_im = from_im.convert('RGB')
             from_im = transform(from_im)
             outputs = net.get_test_code(from_im.unsqueeze(0).to("cuda").float())
-            codes=sampler(outputs, dist, test_opts)
+            codes=sampler(outputs, dist, test_opts, emotion_average_code )
             with torch.no_grad():
                 res0 = net.decode(codes, randomize_noise=False, resize=opts.resize_outputs)
             res0 = tensor2im(res0[0])
             im_save_path = os.path.join(output_path, from_im_name+'_'+str(j)+'.jpg')
             Image.fromarray(np.array(res0)).save(im_save_path)
-
-
-    
