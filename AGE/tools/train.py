@@ -100,7 +100,7 @@ def train():
 				transforms.RandomHorizontalFlip(0.5),
 				transforms.ToTensor(),
 				transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
-				#AddGaussianNoise(0,0.05)
+				AddGaussianNoise(0,0.05)
 				]),
 			'transform_source': None,
 			'transform_valid': transforms.Compose([
@@ -262,10 +262,10 @@ def calc_loss(opts, outputs, y, orthogonal, orthogonal1,sparse, lpips):
 		loss_orthogonal_AB = orthogonal(outputs['A'])
 		loss_dict['loss_orthogona'] = loss_orthogonal_AB
 		loss += (loss_orthogonal_AB) * opts.orthogonal_lambda
-	# if opts.orthogonal_lambda > 0:
-	# 	loss_orthogonal_AB1 = orthogonal1(outputs['A'])
-	# 	loss_dict['loss_orthogona1'] = loss_orthogonal_AB1
-	# 	loss += (loss_orthogonal_AB1) * opts.orthogonal_lambda
+	if opts.orthogonal_lambda > 0:
+		loss_orthogonal_AB1 = orthogonal1(outputs['A'])
+		loss_dict['loss_orthogona1'] = loss_orthogonal_AB1
+		loss += (loss_orthogonal_AB1) * opts.orthogonal_lambda
 	if opts.sparse_lambda > 0:
 		loss_l1 = sparse(outputs['x'])
 		loss_dict['loss_sparse'] = loss_l1
