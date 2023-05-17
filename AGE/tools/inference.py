@@ -51,6 +51,7 @@ def sampler(outputs, dist, opts):
     groups=[[0,1,2],[3,4,5]]
     for i in range(means.shape[0]):
         x=torch.from_numpy(np.random.multivariate_normal(mean=means[i], cov=covs[i], size=1)).float().cuda()
+        print( x) 
         mask = torch.where(torch.from_numpy(means_abs[i])>opts.beta, one, zero).cuda()
         x=x*mask
         for g in groups[i]:
@@ -64,9 +65,7 @@ def sampler(outputs, dist, opts):
 
 
 if __name__=='__main__':
-    SEED = 0
-    random.seed(SEED)
-    np.random.seed(SEED)
+
 
     #load model
     test_opts = TestOptions().parse()
@@ -90,7 +89,9 @@ if __name__=='__main__':
     # class_embeddings=torch.load(os.path.join(test_opts.class_embedding_path, 'class_embeddings.pt'))
     # get_n_distribution(net, transform, class_embeddings, test_opts)
 
-
+    random.seed(2064)
+    np.random.seed(2064)
+    seed_array = np.random.choice(1000, test_opts.n_images, replace=False)
 
     # generate data
     dist=np.load(os.path.join(opts.n_distribution_path, 'n_distribution.npy'), allow_pickle=True).item()
@@ -100,9 +101,12 @@ if __name__=='__main__':
     from_ims = os.listdir(test_data_path)
     for from_im_name in from_ims:
         for j in tqdm(range(test_opts.n_images)):
+            SEED = seed_array[ j ]
             from_im = Image.open(os.path.join(test_data_path, from_im_name))
             from_im = from_im.convert('RGB')
             from_im = transform(from_im)
+            random.seed(SEED)
+            np.random.seed(SEED)
             outputs = net.get_test_code(from_im.unsqueeze(0).to("cuda").float())
             codes=sampler(outputs, dist, test_opts)
             with torch.no_grad():
