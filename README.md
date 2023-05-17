@@ -4,9 +4,10 @@
 ## Description   
 Modified implementation of AGE for few-shot image generation. Code is modified from [AGE](https://github.com/UniBester/AGE.git(https://github.com/UniBester/AGE.git).
 
-# modification
-- remove the seed fixing during inference. Now one seed is used to generate one image. All seeds are preset.
-- add guassian noise in the datapipe line
+### modification
+- removed the seed fixing during inference. Now one seed is used to generate one image. All seeds are preset.
+- added guassian noise in the datapipe line
+- added orthogonal loss for global dictionary A
 
 ## Getting Started
 ### Prerequisites
